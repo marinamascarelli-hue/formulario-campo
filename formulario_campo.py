@@ -172,23 +172,28 @@ creds_json = st.secrets["oauth_credentials"]["client_json"]
 creds_info = json.loads(creds_json)
 
 # Ajuste de redirecionamento para funcionar no Streamlit Cloud
-flow = InstalledAppFlow.from_client_config(
-    creds_info,
-    SCOPES,
-    redirect_uri="https://formulario-campo.streamlit.app"
+redirect_uri = "https://formulario-campo.streamlit.app"
+flow = InstalledAppFlow.from_client_config(creds_info, SCOPES, redirect_uri=redirect_uri)
+
+auth_url, _ = flow.authorization_url(
+    access_type="offline",
+    prompt="consent",
+    include_granted_scopes="true"
 )
 
-st.info("🔐 Autenticação necessária. Clique no link abaixo para autorizar o acesso ao Google Drive:")
+st.markdown(f"### 🔐 Etapa de Autenticação")
+st.write("1️⃣ Clique no link abaixo para autorizar o app a acessar seu Google Drive.")
+st.write(f"👉 [Autorizar aplicativo]({auth_url})")
 
-auth_url, _ = flow.authorization_url(prompt='consent', access_type='offline', include_granted_scopes='true')
-st.markdown(f"[Clique aqui para autorizar o aplicativo]({auth_url})")
-
-auth_code = st.text_input("Cole aqui o código de autorização:")
+auth_code = st.text_input("2️⃣ Após autorizar, cole aqui o código mostrado pelo Google:")
 
 if auth_code:
     flow.fetch_token(code=auth_code)
     creds = flow.credentials
-    st.success("✅ Autenticação concluída com sucesso!")
+    with open("token_drive.pkl", "wb") as token:
+        pickle.dump(creds, token)
+    st.success("✅ Autenticação concluída com sucesso! Agora você pode salvar os dados.")
+
 
     if creds:
         service = build("drive", "v3", credentials=creds)
@@ -212,4 +217,5 @@ if auth_code:
 
         st.success("✅ Dados e fotos enviados com sucesso para o Google Drive!")
         st.balloons()
+
 
