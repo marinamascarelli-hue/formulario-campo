@@ -37,18 +37,40 @@ st.write("Preencha as informações e anexe as fotografias correspondentes ao at
 fuso_brasilia = pytz.timezone("America/Sao_Paulo")
 agora_brasilia = datetime.now(fuso_brasilia)
 
+# --- Inicializa session_state defaults para preservar após rerun
+if "data" not in st.session_state:
+    st.session_state["data"] = agora_brasilia.date()
+if "hora" not in st.session_state:
+    st.session_state["hora"] = agora_brasilia.time().replace(microsecond=0)
+if "latitude" not in st.session_state:
+    st.session_state["latitude"] = ""
+if "longitude" not in st.session_state:
+    st.session_state["longitude"] = ""
+if "preservacao" not in st.session_state:
+    st.session_state["preservacao"] = ""
+if "vtr" not in st.session_state:
+    st.session_state["vtr"] = ""
+if "acompanhante" not in st.session_state:
+    st.session_state["acompanhante"] = ""
+if "fotografo" not in st.session_state:
+    st.session_state["fotografo"] = ""
+if "materiais" not in st.session_state:
+    st.session_state["materiais"] = ""
+if "observacoes" not in st.session_state:
+    st.session_state["observacoes"] = ""
+
 col1, col2 = st.columns(2)
 with col1:
-    data = st.date_input("📅 Data do Atendimento", agora_brasilia.date())
+    data = st.date_input("📅 Data do Atendimento", value=st.session_state["data"], key="data")
 with col2:
-    hora = st.time_input("🕒 Horário", agora_brasilia.time())
+    hora = st.time_input("🕒 Horário", value=st.session_state["hora"], key="hora")
 
 # -------------------------------------------------------
 # 📍 GEOLOCALIZAÇÃO
 # -------------------------------------------------------
 st.markdown("### 📍 Geolocalização do Local do Fato")
-latitude = st.text_input("Latitude (use o botão abaixo para capturar automaticamente):")
-longitude = st.text_input("Longitude:")
+latitude = st.text_input("Latitude (use o botão abaixo para capturar automaticamente):", value=st.session_state["latitude"], key="latitude")
+longitude = st.text_input("Longitude:", value=st.session_state["longitude"], key="longitude")
 
 geo_script = """
 <script>
@@ -76,9 +98,9 @@ if st.button("📍 Capturar minha localização"):
 # -------------------------------------------------------
 # 🧩 CAMPOS DO ATENDIMENTO
 # -------------------------------------------------------
-preservacao = st.text_input("🔒 Preservação (situação do local)")
-vtr = st.text_input("🚓 VTR (veículo utilizado)")
-acompanhante = st.text_input("👮 Acompanhante")
+preservacao = st.text_input("🔒 Preservação (situação do local)", value=st.session_state["preservacao"], key="preservacao")
+vtr = st.text_input("🚓 VTR (veículo utilizado)", value=st.session_state["vtr"], key="vtr")
+acompanhante = st.text_input("👮 Acompanhante", value=st.session_state["acompanhante"], key="acompanhante")
 
 fotografos = [
     "Adriano Godoi de Lara",
@@ -89,56 +111,94 @@ fotografos = [
     "Murilo Carlos de Souza",
     "Sandro Alberto Baracho"
 ]
-fotografo = st.selectbox("📸 Fotógrafo Responsável", fotografos)
 
-materiais = st.text_area("🧪 Materiais Coletados")
-observacoes = st.text_area("🗒️ Observações Gerais")
+# preseleciona index se houver valor salvo
+default_idx = 0
+if st.session_state["fotografo"] in fotografos:
+    default_idx = fotografos.index(st.session_state["fotografo"])
+fotografo = st.selectbox("📸 Fotógrafo Responsável", fotografos, index=default_idx, key="fotografo")
+
+materiais = st.text_area("🧪 Materiais Coletados", value=st.session_state["materiais"], key="materiais")
+observacoes = st.text_area("🗒️ Observações Gerais", value=st.session_state["observacoes"], key="observacoes")
 
 # -------------------------------------------------------
 # 📷 UPLOAD DE FOTOS
 # -------------------------------------------------------
 st.markdown("## 📷 Upload de Fotografias")
-
-fachada = st.file_uploader("🏠 Fachada (1 foto)", type=["jpg", "jpeg", "png"], accept_multiple_files=False)
-acesso = st.file_uploader("🚪 Acesso (até 3 fotos)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-vestigios = st.file_uploader("🧬 Vestígios (até 10 fotos)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-digitais = st.file_uploader("🧤 Digitais e DNA (até 5 fotos)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+fachada = st.file_uploader("🏠 Fachada (1 foto)", type=["jpg", "jpeg", "png"], accept_multiple_files=False, key="fachada")
+acesso = st.file_uploader("🚪 Acesso (até 3 fotos)", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="acesso")
+vestigios = st.file_uploader("🧬 Vestígios (até 10 fotos)", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="vestigios")
+digitais = st.file_uploader("🧤 Digitais e DNA (até 5 fotos)", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="digitais")
 
 # -------------------------------------------------------
-# ☁️ AUTENTICAÇÃO GOOGLE DRIVE
+# ☁️ AUTENTICAÇÃO GOOGLE DRIVE (com captura automática do code)
 # -------------------------------------------------------
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 creds = None
 
-# ✅ Verifica se o token já existe
+# tenta carregar token salvo
 if TOKEN_PATH.exists():
-    with open(TOKEN_PATH, "rb") as token:
-        creds = pickle.load(token)
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
+    try:
+        with open(TOKEN_PATH, "rb") as token:
+            creds = pickle.load(token)
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+    except Exception:
+        creds = None
 
-# Se não existir, pede autenticação manual
+# se não há credenciais válidas, inicia fluxo e trata redirect automaticamente
 if not creds or not creds.valid:
-    st.warning("🔐 É necessário autorizar o acesso ao Google Drive antes de enviar os dados.")
-    creds_json = st.secrets["oauth_credentials"]["client_json"]
+    st.info("🔐 É necessário autorizar o acesso ao Google Drive antes de enviar os dados.")
+    creds_json = st.secrets.get("oauth_credentials", {}).get("client_json")
+    if not creds_json:
+        st.error("⚠️ Credenciais OAuth não encontradas em st.secrets. Adicione `oauth_credentials.client_json` no painel de secrets.")
+        st.stop()
     creds_info = json.loads(creds_json)
-    redirect_uri = "https://formulario-campo.streamlit.app"
+
+    # redirect_uri EXATO que deve estar cadastrado no Google Cloud Console
+    redirect_uri = "https://formulario-campo.streamlit.app"  # ajuste se o seu app tiver outro domínio
 
     flow = InstalledAppFlow.from_client_config(creds_info, SCOPES, redirect_uri=redirect_uri)
-    auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", include_granted_scopes="true")
 
-    st.markdown("1️⃣ Clique no link abaixo para autorizar:")
-    st.markdown(f"👉 [Autorizar aplicativo]({auth_url})")
+    # Detecta se o Google redirecionou de volta com ?code=...
+    query_params = st.experimental_get_query_params()
+    code_from_google = query_params.get("code", [None])[0]
 
-    auth_code = st.text_input("2️⃣ Após autorizar, cole aqui o código mostrado pelo Google:")
+    if code_from_google:
+        # finaliza o fluxo usando o code retornado no redirect
+        try:
+            flow.fetch_token(code=code_from_google)
+            creds = flow.credentials
+            # salva token para próximas execuções
+            with open(TOKEN_PATH, "wb") as token:
+                pickle.dump(creds, token)
+            # limpa params da URL e recarrega (preserva session_state)
+            st.experimental_set_query_params()
+            st.success("✅ Autenticação concluída com sucesso! Recarregando o app...")
+            st.experimental_rerun()
+        except Exception as e:
+            st.error(f"Erro ao trocar code por token: {e}")
+            st.stop()
+    else:
+        # armazena os campos textuais atuais em session_state (será preservado durante redirect)
+        st.session_state["data"] = st.session_state.get("data", agora_brasilia.date())
+        st.session_state["hora"] = st.session_state.get("hora", agora_brasilia.time().replace(microsecond=0))
+        st.session_state["latitude"] = st.session_state.get("latitude", "")
+        st.session_state["longitude"] = st.session_state.get("longitude", "")
+        st.session_state["preservacao"] = st.session_state.get("preservacao", "")
+        st.session_state["vtr"] = st.session_state.get("vtr", "")
+        st.session_state["acompanhante"] = st.session_state.get("acompanhante", "")
+        st.session_state["fotografo"] = st.session_state.get("fotografo", fotografos[0])
+        st.session_state["materiais"] = st.session_state.get("materiais", "")
+        st.session_state["observacoes"] = st.session_state.get("observacoes", "")
 
-    if auth_code:
-        flow.fetch_token(code=auth_code)
-        creds = flow.credentials
-        with open(TOKEN_PATH, "wb") as token:
-            pickle.dump(creds, token)
-        st.success("✅ Autorização concluída! Agora você pode salvar os dados.")
-        st.stop()
+        # gera URL de autorização e informa que o processo continuará automaticamente quando Google redirecionar
+        auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", include_granted_scopes="true")
+        st.markdown("### 🔐 Autenticação necessária")
+        st.markdown("1) Clique no link abaixo e permita o acesso à sua conta Google.")
+        st.markdown(f"👉 [Autorizar aplicativo]({auth_url})")
+        st.markdown("2) Após autorizar, o Google irá redirecionar automaticamente de volta para este app e o envio continuará.")
+        st.stop()  # pausa a execução até o usuário autorizar
 
 # -------------------------------------------------------
 # 💾 SALVAR DADOS E ENVIAR
@@ -146,13 +206,25 @@ if not creds or not creds.valid:
 if creds and st.button("💾 Salvar Dados"):
     st.info("☁️ Salvando dados e enviando para o Google Drive...")
 
+    # Atualiza session_state com os valores atuais (opcional, mas garante persistência)
+    st.session_state["data"] = data
+    st.session_state["hora"] = hora
+    st.session_state["latitude"] = latitude
+    st.session_state["longitude"] = longitude
+    st.session_state["preservacao"] = preservacao
+    st.session_state["vtr"] = vtr
+    st.session_state["acompanhante"] = acompanhante
+    st.session_state["fotografo"] = fotografo
+    st.session_state["materiais"] = materiais
+    st.session_state["observacoes"] = observacoes
+
     # Criar pastas locais
     PASTA_FOTOS.mkdir(exist_ok=True)
     data_pasta = data.strftime("%Y-%m-%d")
     pasta_atendimento = PASTA_FOTOS / f"{data_pasta}_{hora.strftime('%H-%M')}"
     pasta_atendimento.mkdir(exist_ok=True)
 
-    # Subpastas por categoria
+    # Subpastas por categoria e salvar fotos localmente
     subpastas = {
         "fachada": fachada,
         "acesso": acesso[:3] if acesso else [],
@@ -171,7 +243,7 @@ if creds and st.button("💾 Salvar Dados"):
                 with open(caminho_arquivo, "wb") as f:
                     f.write(arquivo.getbuffer())
 
-    # Salvar planilha local
+    # Salvar planilha localmente
     if CAMINHO_PLANILHA.exists():
         df_existente = pd.read_excel(CAMINHO_PLANILHA)
     else:
