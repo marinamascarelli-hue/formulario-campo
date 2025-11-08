@@ -154,23 +154,21 @@ if st.button("💾 Salvar Dados"):
     df_final = pd.concat([df_existente, nova_linha], ignore_index=True)
     df_final.to_excel(CAMINHO_PLANILHA, index=False)
 
-    # ---------------- GOOGLE DRIVE UPLOAD ----------------
+        # ---------------- GOOGLE DRIVE UPLOAD ----------------
     st.info("☁️ Enviando arquivos para o Google Drive...")
 
     from pydrive2.auth import GoogleAuth
     from pydrive2.drive import GoogleDrive
-
     from oauth2client.service_account import ServiceAccountCredentials
 
-gauth = GoogleAuth()
-credenciais = dict(st.secrets["google_drive"])
-escopos = ["https://www.googleapis.com/auth/drive.file"]
-
-gauth.credentials = ServiceAccountCredentials.from_json_keyfile_dict(credenciais, escopos)
-drive = GoogleDrive(gauth)
+    gauth = GoogleAuth()
+    credenciais = dict(st.secrets["google_drive"])
+    escopos = ["https://www.googleapis.com/auth/drive.file"]
+    gauth.credentials = ServiceAccountCredentials.from_json_keyfile_dict(credenciais, escopos)
+    drive = GoogleDrive(gauth)
 
     # ⚠️ Substitua abaixo pelo ID da pasta no seu Google Drive
-    PASTA_ID_DESTINO = "COLE_AQUI_O_ID_DA_SUA_PASTA"
+    PASTA_ID_DESTINO = "13xQ1pcEjGDWQaj1vqgtkuHxsm8ojJkL7"
 
     # Upload da planilha
     arquivo_planilha = drive.CreateFile({
@@ -193,4 +191,3 @@ drive = GoogleDrive(gauth)
 
     st.success("✅ Dados e fotos enviados com sucesso para o Google Drive!")
     st.balloons()
-
