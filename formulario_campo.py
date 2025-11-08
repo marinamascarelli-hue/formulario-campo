@@ -163,28 +163,32 @@ if st.button("💾 Salvar Dados"):
     st.info("☁️ Enviando arquivos para o Google Drive...")
 
     # ----------- AUTENTICAÇÃO OAUTH -----------
-    SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-    creds = None
+import json
+from google_auth_oauthlib.flow import InstalledAppFlow
 
-    if os.path.exists("token_drive.pkl"):
-        with open("token_drive.pkl", "rb") as token:
-            creds = pickle.load(token)
-    else:
-        creds_json = st.secrets["oauth_credentials"]["client_json"]
-        creds_info = json.loads(creds_json)
-        flow = InstalledAppFlow.from_client_config(creds_info, SCOPES)
+SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
-        st.info("🔐 Autenticação necessária: copie o link abaixo e cole no seu navegador para autorizar o acesso ao Google Drive.")
-        auth_url, _ = flow.authorization_url(prompt='consent')
-        st.write("👉 [Clique aqui para autorizar o aplicativo](" + auth_url + ")")
+creds_json = st.secrets["oauth_credentials"]["client_json"]
+creds_info = json.loads(creds_json)
 
-        auth_code = st.text_input("Cole aqui o código de autorização:")
-        if auth_code:
-            flow.fetch_token(code=auth_code)
-            creds = flow.credentials
-            with open("token_drive.pkl", "wb") as token:
-                pickle.dump(creds, token)
-            st.success("✅ Autenticação concluída com sucesso!")
+# Ajuste de redirecionamento para funcionar no Streamlit Cloud
+flow = InstalledAppFlow.from_client_config(
+    creds_info,
+    SCOPES,
+    redirect_uri="https://formulario-campo.streamlit.app"
+)
+
+st.info("🔐 Autenticação necessária. Clique no link abaixo para autorizar o acesso ao Google Drive:")
+
+auth_url, _ = flow.authorization_url(prompt='consent', access_type='offline', include_granted_scopes='true')
+st.markdown(f"[Clique aqui para autorizar o aplicativo]({auth_url})")
+
+auth_code = st.text_input("Cole aqui o código de autorização:")
+
+if auth_code:
+    flow.fetch_token(code=auth_code)
+    creds = flow.credentials
+    st.success("✅ Autenticação concluída com sucesso!")
 
     if creds:
         service = build("drive", "v3", credentials=creds)
@@ -208,3 +212,4 @@ if st.button("💾 Salvar Dados"):
 
         st.success("✅ Dados e fotos enviados com sucesso para o Google Drive!")
         st.balloons()
+
