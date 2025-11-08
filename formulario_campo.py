@@ -3,9 +3,11 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 import os
+import pytz
+from io import StringIO
 
 # -------------------------------------------------------
-# 📁 CONFIGURAÇÃO DE CAMINHOS (compatível com local e nuvem)
+# 📁 CONFIGURAÇÃO DE CAMINHOS (local e nuvem)
 # -------------------------------------------------------
 if os.getenv("HOME", "").startswith("/home/appuser"):
     # Ambiente do Streamlit Cloud (Linux)
@@ -26,13 +28,17 @@ st.title("🧾 Formulário de Atendimento de Campo - Polícia Científica")
 st.write("Preencha as informações e anexe as fotografias correspondentes ao atendimento.")
 
 # -------------------------------------------------------
-# 🕒 DATA E HORA
+# 🕒 DATA E HORA (ajustada para horário de Brasília)
 # -------------------------------------------------------
+import pytz
+fuso_brasilia = pytz.timezone("America/Sao_Paulo")
+agora_brasilia = datetime.now(fuso_brasilia)
+
 col1, col2 = st.columns(2)
 with col1:
-    data = st.date_input("📅 Data do Atendimento", datetime.today())
+    data = st.date_input("📅 Data do Atendimento", agora_brasilia.date())
 with col2:
-    hora = st.time_input("🕒 Horário", datetime.now().time())
+    hora = st.time_input("🕒 Horário", agora_brasilia.time())
 
 # -------------------------------------------------------
 # 📍 GEOLOCALIZAÇÃO
@@ -153,7 +159,6 @@ if st.button("💾 Salvar Dados"):
 
     from pydrive2.auth import GoogleAuth
     from pydrive2.drive import GoogleDrive
-    import json
 
     gauth = GoogleAuth()
     credenciais = dict(st.secrets["google_drive"])
@@ -162,7 +167,7 @@ if st.button("💾 Salvar Dados"):
     )
     drive = GoogleDrive(gauth)
 
-    # ID da pasta de destino no Google Drive
+    # ⚠️ Substitua abaixo pelo ID da pasta no seu Google Drive
     PASTA_ID_DESTINO = "COLE_AQUI_O_ID_DA_SUA_PASTA"
 
     # Upload da planilha
