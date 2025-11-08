@@ -96,10 +96,14 @@ vestigios = st.file_uploader("🧬 Vestígios (até 10 fotos)", type=["jpg", "jp
 digitais = st.file_uploader("🧤 Digitais e DNA (até 5 fotos)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
 # -------------------------------------------------------
-# 💾 SALVAR DADOS
+# 💾 SALVAR DADOS + ENVIAR PARA GOOGLE DRIVE
 # -------------------------------------------------------
+from pydrive2.auth import GoogleAuth
+from pydrive2.drive import GoogleDrive
+import streamlit.runtime.secrets as st_secrets
+
 if st.button("💾 Salvar Dados"):
-    # Criar pastas
+    # Criar pastas locais (temporárias)
     PASTA_FOTOS.mkdir(exist_ok=True)
     data_pasta = data.strftime("%Y-%m-%d")
     pasta_atendimento = PASTA_FOTOS / f"{data_pasta}_{hora.strftime('%H-%M')}"
@@ -113,7 +117,7 @@ if st.button("💾 Salvar Dados"):
         "digitais": digitais[:5] if digitais else []
     }
 
-    # Salvar fotos
+    # Salvar fotos localmente
     for categoria, arquivos in subpastas.items():
         pasta = pasta_atendimento / categoria
         pasta.mkdir(exist_ok=True)
@@ -125,7 +129,7 @@ if st.button("💾 Salvar Dados"):
                 with open(caminho_arquivo, "wb") as f:
                     f.write(arquivo.getbuffer())
 
-    # Salvar informações em planilha
+    # Salvar planilha localmente
     if CAMINHO_PLANILHA.exists():
         df_existente = pd.read_excel(CAMINHO_PLANILHA)
     else:
@@ -148,8 +152,41 @@ if st.button("💾 Salvar Dados"):
     df_final = pd.concat([df_existente, nova_linha], ignore_index=True)
     df_final.to_excel(CAMINHO_PLANILHA, index=False)
 
-    st.success("✅ Dados e fotos salvos com sucesso!")
-    st.balloons()
+    # ---------------- GOOGLE DRIVE UPLOAD ----------------
+    st.info("☁️ Enviando arquivos para o Google Drive...")
 
-    # Mensagem de caminho no ambiente
-    st.info(f"📂 Dados armazenados em: {PASTA_BASE}")
+    # Configura autenticação com credenciais do secrets
+    import json
+    from io import StringIO
+
+    gauth = GoogleAuth()
+    credenciais = json.loads(json.dumps(st.secrets["google_drive"]))
+    gauth.credentials = gauth.ServiceAccountCredentials.from_json_keyfile_dict(
+        credenciais, ["https://www.googleapis.com/auth/drive.file"]
+    )
+    drive = GoogleDrive(gauth)
+
+    # ID da pasta de destino (aquela que você compartilhou com o e-mail da conta de serviço)
+    PASTA_ID_DESTINO = "13xQ1pcEjGDWQaj1vqgtkuHxsm8ojJkL7"
+
+    # Faz upload da planilha
+    arquivo_planilha = drive.CreateFile({
+        "title": "dados_campo.xlsx",
+        "parents": [{"id": PASTA_ID_DESTINO}]
+    })
+    arquivo_planilha.SetContentFile(str(CAMINHO_PLANILHA))
+    arquivo_planilha.Upload()
+
+    # Faz upload de cada foto
+    for root, _, files in os.walk(pasta_atendimento):
+        for file in files:
+            caminho = Path(root) / file
+            arquivo_drive = drive.CreateFile({
+                "title": file,
+                "parents": [{"id": PASTA_ID_DESTINO}]
+            })
+            arquivo_drive.SetContentFile(str(caminho))
+            arquivo_drive.Upload()
+
+    st.success("✅ Dados e fotos enviados com sucesso para o Google Drive!")
+    st.balloons()
