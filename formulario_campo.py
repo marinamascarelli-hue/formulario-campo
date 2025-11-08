@@ -160,10 +160,11 @@ if st.button("💾 Salvar Dados"):
     from io import StringIO
 
     gauth = GoogleAuth()
-    credenciais = json.loads(json.dumps(st.secrets["google_drive"]))
-    gauth.credentials = gauth.ServiceAccountCredentials.from_json_keyfile_dict(
-        credenciais, ["https://www.googleapis.com/auth/drive.file"]
-    )
+    credenciais = dict(st.secrets["google_drive"])
+gauth.credentials = gauth.ServiceAccountCredentials.from_json_keyfile_dict(
+    credenciais, ["https://www.googleapis.com/auth/drive.file"]
+)
+
     drive = GoogleDrive(gauth)
 
     # ID da pasta de destino (aquela que você compartilhou com o e-mail da conta de serviço)
@@ -190,3 +191,4 @@ if st.button("💾 Salvar Dados"):
 
     st.success("✅ Dados e fotos enviados com sucesso para o Google Drive!")
     st.balloons()
+
