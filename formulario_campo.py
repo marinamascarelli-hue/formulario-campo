@@ -4,12 +4,12 @@ from datetime import datetime
 from pathlib import Path
 import os
 import pytz
+import json
+import pickle
 from io import StringIO
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-import pickle
-import json
 
 # -------------------------------------------------------
 # 📁 CONFIGURAÇÃO DE CAMINHOS (local e nuvem)
@@ -162,33 +162,49 @@ if st.button("💾 Salvar Dados"):
 
     st.info("☁️ Enviando arquivos para o Google Drive...")
 
-    # ----------- AUTENTICAÇÃO OAUTH (ATUALIZADA PARA STREAMLIT) -----------
+    # ----------- AUTENTICAÇÃO OAUTH -----------
     SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+    creds = None
 
-    creds_json = st.secrets["oauth_credentials"]["client_json"]
-    creds_info = json.loads(creds_json)
+    if os.path.exists("token_drive.pkl"):
+        with open("token_drive.pkl", "rb") as token:
+            creds = pickle.load(token)
+    else:
+        creds_json = st.secrets["oauth_credentials"]["client_json"]
+        creds_info = json.loads(creds_json)
+        flow = InstalledAppFlow.from_client_config(creds_info, SCOPES)
 
-    flow = InstalledAppFlow.from_client_config(creds_info, SCOPES)
-    creds = flow.run_local_server(port=0)
+        st.info("🔐 Autenticação necessária: copie o link abaixo e cole no seu navegador para autorizar o acesso ao Google Drive.")
+        auth_url, _ = flow.authorization_url(prompt='consent')
+        st.write("👉 [Clique aqui para autorizar o aplicativo](" + auth_url + ")")
 
-    service = build("drive", "v3", credentials=creds)
-    PASTA_ID_DESTINO = "13xQ1pcEjGDWQaj1vqgtkuHxsm8ojJkL7"
+        auth_code = st.text_input("Cole aqui o código de autorização:")
+        if auth_code:
+            flow.fetch_token(code=auth_code)
+            creds = flow.credentials
+            with open("token_drive.pkl", "wb") as token:
+                pickle.dump(creds, token)
+            st.success("✅ Autenticação concluída com sucesso!")
 
-    # Upload da planilha
-    file_metadata = {"name": "dados_campo.xlsx", "parents": [PASTA_ID_DESTINO]}
-    media = MediaFileUpload(
-        str(CAMINHO_PLANILHA),
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+    if creds:
+        service = build("drive", "v3", credentials=creds)
+        PASTA_ID_DESTINO = "13xQ1pcEjGDWQaj1vqgtkuHxsm8ojJkL7"
 
-    # Upload das fotos
-    for root, _, files in os.walk(pasta_atendimento):
-        for file in files:
-            caminho = Path(root) / file
-            file_metadata = {"name": file, "parents": [PASTA_ID_DESTINO]}
-            media = MediaFileUpload(str(caminho), mimetype="image/jpeg")
-            service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+        # Upload da planilha
+        file_metadata = {"name": "dados_campo.xlsx", "parents": [PASTA_ID_DESTINO]}
+        media = MediaFileUpload(
+            str(CAMINHO_PLANILHA),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
-    st.success("✅ Dados e fotos enviados com sucesso para o Google Drive!")
-    st.balloons()
+        # Upload das fotos
+        for root, _, files in os.walk(pasta_atendimento):
+            for file in files:
+                caminho = Path(root) / file
+                file_metadata = {"name": file, "parents": [PASTA_ID_DESTINO]}
+                media = MediaFileUpload(str(caminho), mimetype="image/jpeg")
+                service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+
+        st.success("✅ Dados e fotos enviados com sucesso para o Google Drive!")
+        st.balloons()
