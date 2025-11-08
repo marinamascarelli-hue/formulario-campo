@@ -98,10 +98,6 @@ digitais = st.file_uploader("🧤 Digitais e DNA (até 5 fotos)", type=["jpg", "
 # -------------------------------------------------------
 # 💾 SALVAR DADOS + ENVIAR PARA GOOGLE DRIVE
 # -------------------------------------------------------
-from pydrive2.auth import GoogleAuth
-from pydrive2.drive import GoogleDrive
-import streamlit.runtime.secrets as st_secrets
-
 if st.button("💾 Salvar Dados"):
     # Criar pastas locais (temporárias)
     PASTA_FOTOS.mkdir(exist_ok=True)
@@ -155,22 +151,21 @@ if st.button("💾 Salvar Dados"):
     # ---------------- GOOGLE DRIVE UPLOAD ----------------
     st.info("☁️ Enviando arquivos para o Google Drive...")
 
-    # Configura autenticação com credenciais do secrets
+    from pydrive2.auth import GoogleAuth
+    from pydrive2.drive import GoogleDrive
     import json
-    from io import StringIO
 
     gauth = GoogleAuth()
     credenciais = dict(st.secrets["google_drive"])
-gauth.credentials = gauth.ServiceAccountCredentials.from_json_keyfile_dict(
-    credenciais, ["https://www.googleapis.com/auth/drive.file"]
-)
-
+    gauth.credentials = gauth.ServiceAccountCredentials.from_json_keyfile_dict(
+        credenciais, ["https://www.googleapis.com/auth/drive.file"]
+    )
     drive = GoogleDrive(gauth)
 
-    # ID da pasta de destino (aquela que você compartilhou com o e-mail da conta de serviço)
-    PASTA_ID_DESTINO = "13xQ1pcEjGDWQaj1vqgtkuHxsm8ojJkL7"
+    # ID da pasta de destino no Google Drive
+    PASTA_ID_DESTINO = "COLE_AQUI_O_ID_DA_SUA_PASTA"
 
-    # Faz upload da planilha
+    # Upload da planilha
     arquivo_planilha = drive.CreateFile({
         "title": "dados_campo.xlsx",
         "parents": [{"id": PASTA_ID_DESTINO}]
@@ -178,7 +173,7 @@ gauth.credentials = gauth.ServiceAccountCredentials.from_json_keyfile_dict(
     arquivo_planilha.SetContentFile(str(CAMINHO_PLANILHA))
     arquivo_planilha.Upload()
 
-    # Faz upload de cada foto
+    # Upload das fotos
     for root, _, files in os.walk(pasta_atendimento):
         for file in files:
             caminho = Path(root) / file
@@ -191,4 +186,3 @@ gauth.credentials = gauth.ServiceAccountCredentials.from_json_keyfile_dict(
 
     st.success("✅ Dados e fotos enviados com sucesso para o Google Drive!")
     st.balloons()
-
