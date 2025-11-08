@@ -1,26 +1,42 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import os
 from pathlib import Path
+import os
 
-# 📁 Caminhos
-PASTA_BASE = Path(r"C:\Users\Marina\Desktop\Formulario de Campo")
+# -------------------------------------------------------
+# 📁 CONFIGURAÇÃO DE CAMINHOS (compatível com local e nuvem)
+# -------------------------------------------------------
+if os.getenv("HOME", "").startswith("/home/appuser"):
+    # Ambiente do Streamlit Cloud (Linux)
+    PASTA_BASE = Path("/tmp/formulario_campo")
+else:
+    # Ambiente local (Windows)
+    PASTA_BASE = Path(r"C:\Users\Marina\Desktop\Formulario de Campo")
+
+PASTA_BASE.mkdir(exist_ok=True)
 CAMINHO_PLANILHA = PASTA_BASE / "dados_campo.xlsx"
 PASTA_FOTOS = PASTA_BASE / "fotos"
 
+# -------------------------------------------------------
+# 🧾 CONFIGURAÇÃO INICIAL DO APP
+# -------------------------------------------------------
 st.set_page_config(page_title="Formulário de Atendimento", page_icon="📋", layout="centered")
 st.title("🧾 Formulário de Atendimento de Campo - Polícia Científica")
 st.write("Preencha as informações e anexe as fotografias correspondentes ao atendimento.")
 
-# 📅 Data e horário automáticos
+# -------------------------------------------------------
+# 🕒 DATA E HORA
+# -------------------------------------------------------
 col1, col2 = st.columns(2)
 with col1:
     data = st.date_input("📅 Data do Atendimento", datetime.today())
 with col2:
     hora = st.time_input("🕒 Horário", datetime.now().time())
 
-# 📍 Geolocalização
+# -------------------------------------------------------
+# 📍 GEOLOCALIZAÇÃO
+# -------------------------------------------------------
 st.markdown("### 📍 Geolocalização do Local do Fato")
 latitude = st.text_input("Latitude (use o botão abaixo para capturar automaticamente):")
 longitude = st.text_input("Longitude:")
@@ -48,7 +64,9 @@ navigator.geolocation.getCurrentPosition(
 if st.button("📍 Capturar minha localização"):
     st.components.v1.html(geo_script, height=0)
 
-# 🧩 Campos do atendimento
+# -------------------------------------------------------
+# 🧩 CAMPOS DO ATENDIMENTO
+# -------------------------------------------------------
 preservacao = st.text_input("🔒 Preservação (situação do local)")
 vtr = st.text_input("🚓 VTR (veículo utilizado)")
 acompanhante = st.text_input("👮 Acompanhante")
@@ -67,7 +85,9 @@ fotografo = st.selectbox("📸 Fotógrafo Responsável", fotografos)
 materiais = st.text_area("🧪 Materiais Coletados")
 observacoes = st.text_area("🗒️ Observações Gerais")
 
-# 🖼️ Upload de fotos
+# -------------------------------------------------------
+# 📷 UPLOAD DE FOTOS
+# -------------------------------------------------------
 st.markdown("## 📷 Upload de Fotografias")
 
 fachada = st.file_uploader("🏠 Fachada (1 foto)", type=["jpg", "jpeg", "png"], accept_multiple_files=False)
@@ -75,9 +95,11 @@ acesso = st.file_uploader("🚪 Acesso (até 3 fotos)", type=["jpg", "jpeg", "pn
 vestigios = st.file_uploader("🧬 Vestígios (até 10 fotos)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 digitais = st.file_uploader("🧤 Digitais e DNA (até 5 fotos)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
-# 🔘 Botão de salvar
+# -------------------------------------------------------
+# 💾 SALVAR DADOS
+# -------------------------------------------------------
 if st.button("💾 Salvar Dados"):
-    # Criar pasta base e de fotos
+    # Criar pastas
     PASTA_FOTOS.mkdir(exist_ok=True)
     data_pasta = data.strftime("%Y-%m-%d")
     pasta_atendimento = PASTA_FOTOS / f"{data_pasta}_{hora.strftime('%H-%M')}"
@@ -91,6 +113,7 @@ if st.button("💾 Salvar Dados"):
         "digitais": digitais[:5] if digitais else []
     }
 
+    # Salvar fotos
     for categoria, arquivos in subpastas.items():
         pasta = pasta_atendimento / categoria
         pasta.mkdir(exist_ok=True)
@@ -102,7 +125,7 @@ if st.button("💾 Salvar Dados"):
                 with open(caminho_arquivo, "wb") as f:
                     f.write(arquivo.getbuffer())
 
-    # Registrar no Excel
+    # Salvar informações em planilha
     if CAMINHO_PLANILHA.exists():
         df_existente = pd.read_excel(CAMINHO_PLANILHA)
     else:
@@ -127,3 +150,6 @@ if st.button("💾 Salvar Dados"):
 
     st.success("✅ Dados e fotos salvos com sucesso!")
     st.balloons()
+
+    # Mensagem de caminho no ambiente
+    st.info(f"📂 Dados armazenados em: {PASTA_BASE}")
