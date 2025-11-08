@@ -5,15 +5,17 @@ from pathlib import Path
 import os
 import pytz
 from io import StringIO
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+import pickle
 
 # -------------------------------------------------------
 # 📁 CONFIGURAÇÃO DE CAMINHOS (local e nuvem)
 # -------------------------------------------------------
 if os.getenv("HOME", "").startswith("/home/appuser"):
-    # Ambiente do Streamlit Cloud (Linux)
     PASTA_BASE = Path("/tmp/formulario_campo")
 else:
-    # Ambiente local (Windows)
     PASTA_BASE = Path(r"C:\Users\Marina\Desktop\Formulario de Campo")
 
 PASTA_BASE.mkdir(exist_ok=True)
@@ -30,7 +32,6 @@ st.write("Preencha as informações e anexe as fotografias correspondentes ao at
 # -------------------------------------------------------
 # 🕒 DATA E HORA (ajustada para horário de Brasília)
 # -------------------------------------------------------
-import pytz
 fuso_brasilia = pytz.timezone("America/Sao_Paulo")
 agora_brasilia = datetime.now(fuso_brasilia)
 
@@ -102,10 +103,10 @@ vestigios = st.file_uploader("🧬 Vestígios (até 10 fotos)", type=["jpg", "jp
 digitais = st.file_uploader("🧤 Digitais e DNA (até 5 fotos)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
 # -------------------------------------------------------
-# 💾 SALVAR DADOS + ENVIAR PARA GOOGLE DRIVE
+# 💾 SALVAR DADOS + ENVIAR PARA GOOGLE DRIVE (OAuth)
 # -------------------------------------------------------
 if st.button("💾 Salvar Dados"):
-    # Criar pastas locais (temporárias)
+    # Criar pastas locais
     PASTA_FOTOS.mkdir(exist_ok=True)
     data_pasta = data.strftime("%Y-%m-%d")
     pasta_atendimento = PASTA_FOTOS / f"{data_pasta}_{hora.strftime('%H-%M')}"
@@ -119,7 +120,6 @@ if st.button("💾 Salvar Dados"):
         "digitais": digitais[:5] if digitais else []
     }
 
-    # Salvar fotos localmente
     for categoria, arquivos in subpastas.items():
         pasta = pasta_atendimento / categoria
         pasta.mkdir(exist_ok=True)
@@ -152,42 +152,44 @@ if st.button("💾 Salvar Dados"):
     }])
 
     df_final = pd.concat([df_existente, nova_linha], ignore_index=True)
-    df_final.to_excel(CAMINHO_PLANILHA, index=False)
 
-        # ---------------- GOOGLE DRIVE UPLOAD ----------------
+    try:
+        df_final.to_excel(CAMINHO_PLANILHA, index=False)
+    except PermissionError:
+        st.warning("⚠️ Feche o arquivo 'dados_campo.xlsx' no Excel e clique novamente em 'Salvar Dados'.")
+        st.stop()
+
     st.info("☁️ Enviando arquivos para o Google Drive...")
 
-    from pydrive2.auth import GoogleAuth
-    from pydrive2.drive import GoogleDrive
-    from oauth2client.service_account import ServiceAccountCredentials
+    # ----------- AUTENTICAÇÃO OAUTH -----------
+    SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+    if os.path.exists("token_drive.pkl"):
+        with open("token_drive.pkl", "rb") as token:
+            creds = pickle.load(token)
+    else:
+        flow = InstalledAppFlow.from_client_secrets_file("credentials_oauth.json", SCOPES)
+        creds = flow.run_local_server(port=0)
+        with open("token_drive.pkl", "wb") as token:
+            pickle.dump(creds, token)
 
-    gauth = GoogleAuth()
-    credenciais = dict(st.secrets["google_drive"])
-    escopos = ["https://www.googleapis.com/auth/drive.file"]
-    gauth.credentials = ServiceAccountCredentials.from_json_keyfile_dict(credenciais, escopos)
-    drive = GoogleDrive(gauth)
-
-    # ⚠️ Substitua abaixo pelo ID da pasta no seu Google Drive
+    service = build("drive", "v3", credentials=creds)
     PASTA_ID_DESTINO = "13xQ1pcEjGDWQaj1vqgtkuHxsm8ojJkL7"
 
     # Upload da planilha
-    arquivo_planilha = drive.CreateFile({
-        "title": "dados_campo.xlsx",
-        "parents": [{"id": PASTA_ID_DESTINO}]
-    })
-    arquivo_planilha.SetContentFile(str(CAMINHO_PLANILHA))
-    arquivo_planilha.Upload()
+    file_metadata = {"name": "dados_campo.xlsx", "parents": [PASTA_ID_DESTINO]}
+    media = MediaFileUpload(
+        str(CAMINHO_PLANILHA),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
     # Upload das fotos
     for root, _, files in os.walk(pasta_atendimento):
         for file in files:
             caminho = Path(root) / file
-            arquivo_drive = drive.CreateFile({
-                "title": file,
-                "parents": [{"id": PASTA_ID_DESTINO}]
-            })
-            arquivo_drive.SetContentFile(str(caminho))
-            arquivo_drive.Upload()
+            file_metadata = {"name": file, "parents": [PASTA_ID_DESTINO]}
+            media = MediaFileUpload(str(caminho), mimetype="image/jpeg")
+            service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
     st.success("✅ Dados e fotos enviados com sucesso para o Google Drive!")
     st.balloons()
