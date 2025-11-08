@@ -160,12 +160,14 @@ if st.button("💾 Salvar Dados"):
     from pydrive2.auth import GoogleAuth
     from pydrive2.drive import GoogleDrive
 
-    gauth = GoogleAuth()
-    credenciais = dict(st.secrets["google_drive"])
-    gauth.credentials = gauth.ServiceAccountCredentials.from_json_keyfile_dict(
-        credenciais, ["https://www.googleapis.com/auth/drive.file"]
-    )
-    drive = GoogleDrive(gauth)
+    from oauth2client.service_account import ServiceAccountCredentials
+
+gauth = GoogleAuth()
+credenciais = dict(st.secrets["google_drive"])
+escopos = ["https://www.googleapis.com/auth/drive.file"]
+
+gauth.credentials = ServiceAccountCredentials.from_json_keyfile_dict(credenciais, escopos)
+drive = GoogleDrive(gauth)
 
     # ⚠️ Substitua abaixo pelo ID da pasta no seu Google Drive
     PASTA_ID_DESTINO = "COLE_AQUI_O_ID_DA_SUA_PASTA"
@@ -191,3 +193,4 @@ if st.button("💾 Salvar Dados"):
 
     st.success("✅ Dados e fotos enviados com sucesso para o Google Drive!")
     st.balloons()
+
